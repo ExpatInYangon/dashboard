@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Enhanced Web Map with GeoJSON</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+
+    <!-- Leaflet MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+
+    <!-- Leaflet Control Geocoder CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+        }
+
+        /* Sidebar Styles */
+        #sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 270px;
+            height: 100%;
+            background-color: #343a40;
+            color: #ffffff;
+            padding: 70px 20px 20px 20px; /* Added top padding to avoid overlap */
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s ease;
+        }
+
+        #sidebar.collapsed {
+            transform: translateX(-100%);
+        }
+
+        /* Map Container */
+        #mapContainer {
+            margin-left: 270px;
+            transition: margin-left 0.3s ease, margin-right 0.3s ease;
+        }
+
+        #mapContainer.fullwidth {
+            margin-left: 0;
+        }
+
+        /* Adjust map container when infoSidebar is open */
+        #mapContainer.expanded {
+            margin-right: 270px; /* Adjust based on sidebar width */
+        }
+
+        /* Toggle Button Styles */
+        #toggleSidebar {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            z-index: 1100;
+            color: #ffffff;
+            background-color: #343a40;
+            border: none;
+            padding: 10px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        #toggleSidebar:hover {
+            background-color: #495057;
+        }
+
+        /* Map Styles */
+        #map {
+            height: 100vh;
+        }
+
+        /* Search Box */
+        #searchBox {
+            background-color: #495057;
+            color: #ffffff;
+            border: none;
+            margin-bottom: 20px;
+        }
+
+        #searchBox::placeholder {
+            color: #ced4da;
+        }
+
+        /* Name Items */
+        .name-item {
+            background-color: #495057;
+            color: #ffffff;
+            cursor: pointer;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            border: none;
+            text-align: left;
+            width: 100%;
+        }
+
+        .name-item:hover {
+            background-color: #6c757d;
+        }
+
+        /* Controls */
+        #controls button {
+            color: #ffffff;
+            border-color: #ffffff;
+            margin-bottom: 10px;
+            width: 100%;
+        }
+
+        #controls button:hover {
+            background-color: #ffffff;
+            color: #343a40;
+        }
+
+        /* Loading Spinner */
+        #loadingSpinner {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            background-color: rgba(255,255,255,0.8);
+            z-index: 2000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Right Sidebar Styles */
+        #infoSidebar {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 270px;
+            height: 100%;
+            background-color: #343a40;
+            color: #ffffff;
+            padding: 70px 20px 20px 20px; /* Added top padding */
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s ease;
+            transform: translateX(100%); /* Hidden by default */
+        }
+
+        #infoSidebar.expanded {
+            transform: translateX(0); /* Show sidebar */
+        }
+
+        /* Close Button Styles */
+        #closeInfoSidebar {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            z-index: 1100;
+            color: #ffffff;
+            background-color: transparent;
+            border: none;
+            padding: 10px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        #closeInfoSidebar:hover {
+            background-color: #495057;
+        }
+
+        /* Adjust card styles in the info sidebar */
+        #infoSidebar .card {
+            background-color: #495057;
+            border: none;
+        }
+
+        #infoSidebar .card-header {
+            background-color: #343a40;
+            border-bottom: 1px solid #6c757d;
+        }
+
+        #infoSidebar .card-body {
+            background-color: #495057;
+        }
+
+        #infoSidebar h3 {
+            border-bottom: 1px solid #6c757d;
+            padding-bottom: 10px;
+        }
+
+        /* Chevron Icon Rotation */
+        .fa-chevron-down.rotate {
+            transform: rotate(180deg);
+            transition: transform 0.3s;
+        }
+
+        /* Responsive Adjustments */
+        @media (max-width: 768px) {
+            #sidebar {
+                width: 100%;
+                height: auto;
+                position: fixed;
+                top: 0;
+                left: 0;
+                transform: translateY(-100%);
+                padding-top: 70px; /* Adjusted padding for mobile */
+            }
+
+            #sidebar.collapsed {
+                transform: translateY(0);
+            }
+
+            #mapContainer, #mapContainer.fullwidth, #mapContainer.expanded {
+                margin-left: 0;
+                margin-right: 0;
+            }
+
+            #map {
+                height: calc(100vh - 50px);
+            }
+
+            #toggleSidebar {
+                top: 15px;
+                right: 15px;
+                left: auto;
+            }
+
+            /* Right Sidebar Responsive */
+            #infoSidebar {
+                width: 100%;
+                height: auto;
+                position: fixed;
+                bottom: 0;
+                top: auto;
+                transform: translateY(100%);
+                padding-top: 20px; /* Adjusted padding for mobile */
+            }
+
+            #infoSidebar.expanded {
+                transform: translateY(0);
+            }
+
+            #closeInfoSidebar {
+                top: 15px;
+                right: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Toggle Button -->
+    <button id="toggleSidebar" aria-label="Toggle Sidebar">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div id="sidebar">
+        <h3 class="mb-4">Feature Names</h3>
+        <input type="text" id="searchBox" class="form-control" placeholder="Search names..." aria-label="Search names" />
+        <div id="nameList" class="mt-4"></div>
+        <div id="controls" class="d-flex flex-column align-items-center mt-5">
+            <button id="prevButton" class="btn btn-outline-secondary mb-3" disabled aria-label="Previous page"><i class="fas fa-chevron-left"></i> Previous</button>
+            <button id="nextButton" class="btn btn-outline-primary" aria-label="Next page"><i class="fas fa-chevron-right"></i> Next</button>
+        </div>
+    </div>
+
+    <!-- Right Sidebar -->
+    <div id="infoSidebar" class="collapsed">
+        <button id="closeInfoSidebar" aria-label="Close Info Sidebar">
+            <i class="fas fa-times"></i>
+        </button>
+        <div id="infoContent" class="mt-4"></div>
+    </div>
+
+    <!-- Map Container -->
+    <div id="mapContainer">
+        <div id="map"></div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+
+    <!-- Leaflet MarkerCluster JS -->
+    <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+
+    <!-- Leaflet Control Geocoder JS -->
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Font Awesome JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js"></script>
+
+    <script>
+        // Initialize the map with smooth zoom and pan options
+        var map = L.map('map', {
+            zoomControl: false,
+            zoomAnimation: true,
+            markerZoomAnimation: true,
+            fadeAnimation: true
+        }).setView([23.65, 95.178], 7);
+
+        // Add base layer
+        var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        });
+
+        osmLayer.addTo(map);
+
+        // Add zoom control to a different position
+        L.control.zoom({ position: 'topright' }).addTo(map);
+
+        // Add geocoder control
+        L.Control.geocoder({
+            defaultMarkGeocode: false
+        })
+        .on('markgeocode', function(e) {
+            map.fitBounds(e.geocode.bbox);
+        })
+        .addTo(map);
+
+        // Initialize variables
+        let featureNames = [];
+        let filteredNames = [];
+        let featureData = [];
+        let currentIndex = 0;
+        const itemsPerPage = 3;
+
+        // Create a marker cluster group
+        var markers = L.markerClusterGroup();
+
+        // Function to display names in the sidebar
+        function updateNameList(names) {
+            const nameList = document.getElementById("nameList");
+            nameList.innerHTML = ''; // Clear the current list
+
+            // Get the current set of names to display
+            const pageNames = names.slice(currentIndex, currentIndex + itemsPerPage);
+            pageNames.forEach((nameObj, index) => {
+                const nameDiv = document.createElement("button");
+                nameDiv.classList.add("name-item");
+                nameDiv.innerHTML = `<i class="fas fa-map-marker-alt me-2"></i> ${nameObj.name}`;
+                nameDiv.addEventListener("click", () => {
+                    map.fitBounds(nameObj.bounds); // Zoom to the feature's bounds
+                });
+                nameList.appendChild(nameDiv);
+            });
+
+            // Update button states
+            document.getElementById("prevButton").disabled = currentIndex === 0;
+            document.getElementById("nextButton").disabled = currentIndex + itemsPerPage >= names.length;
+        }
+
+        // Load GeoJSON data
+        fetch('mock-up-test.geojson')
+            .then(response => response.json())
+            .then(data => {
+                var geoJsonLayer = L.geoJSON(data, {
+                    onEachFeature: function(feature, layer) {
+                        if (feature.properties && feature.properties.Name) {
+                            const bounds = layer.getBounds(); // Get bounds of each feature
+                            featureNames.push({ name: feature.properties.Name, bounds: bounds });
+                            featureData.push(layer); // Store each feature's layer
+
+                            // Add click event listener to open right sidebar
+                            layer.on('click', function() {
+                                // Populate the sidebar with feature properties
+                                populateInfoSidebar(feature.properties);
+
+                                // Open the sidebar
+                                document.getElementById('infoSidebar').classList.add('expanded');
+                                document.getElementById('mapContainer').classList.add('expanded');
+
+                                // Adjust the map size
+                                setTimeout(() => {
+                                    map.invalidateSize();
+                                }, 300);
+                            });
+                        }
+                    }
+                });
+
+                // Add GeoJSON layer to marker cluster group
+                markers.addLayer(geoJsonLayer);
+
+                // Add marker cluster group to map
+                map.addLayer(markers);
+
+                // Set initial display
+                filteredNames = featureNames;
+                updateNameList(filteredNames);
+            })
+            .catch(error => console.error('Error loading the GeoJSON file:', error))
+            .finally(() => {
+                // Hide the loading spinner
+                document.getElementById('loadingSpinner').style.display = 'none';
+            });
+
+        // Search function
+        document.getElementById("searchBox").addEventListener("input", function() {
+            const searchQuery = this.value.toLowerCase();
+            filteredNames = featureNames.filter(item => item.name.toLowerCase().includes(searchQuery));
+            currentIndex = 0;
+            updateNameList(filteredNames);
+        });
+
+        // Pagination controls
+        document.getElementById("prevButton").addEventListener("click", function() {
+            if (currentIndex > 0) {
+                currentIndex -= itemsPerPage;
+                updateNameList(filteredNames);
+            }
+        });
+
+        document.getElementById("nextButton").addEventListener("click", function() {
+            if (currentIndex + itemsPerPage < filteredNames.length) {
+                currentIndex += itemsPerPage;
+                updateNameList(filteredNames);
+            }
+        });
+
+        // Toggle sidebar functionality
+        document.getElementById('toggleSidebar').addEventListener('click', function() {
+            const sidebar = document.getElementById('sidebar');
+            const mapContainer = document.getElementById('mapContainer');
+
+            sidebar.classList.toggle('collapsed');
+            mapContainer.classList.toggle('fullwidth');
+
+            // Adjust the map size
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 300);
+        });
+
+        // Function to populate the info sidebar with feature properties
+        function populateInfoSidebar(properties) {
+            const infoContent = document.getElementById('infoContent');
+            infoContent.innerHTML = ''; // Clear previous content
+
+            const title = document.createElement('h3');
+            title.innerText = properties.Name;
+            title.classList.add('mb-4');
+            infoContent.appendChild(title);
+
+            // Define the fields, their descriptions, and icons
+            const fields = [
+                { key: 'Affiliation', label: 'Affiliation', icon: 'fa-handshake' },
+                { key: 'Alliances', label: 'Alliances', icon: 'fa-users' },
+                { key: 'FoundDate', label: 'Founding Date(s)', icon: 'fa-calendar-alt' },
+                { key: 'FoundMemb', label: 'Founding Members', icon: 'fa-user-friends' },
+                { key: 'Leader', label: 'Current Leaders', icon: 'fa-user-tie' },
+                { key: 'OperArea', label: 'Operating Areas', icon: 'fa-map-marker-alt' },
+                { key: 'FoundDoc', label: 'Founding Document', icon: 'fa-file-alt' },
+                { key: 'Rel_MainEnt', label: 'Relationship with Mainstream Entities', icon: 'fa-sitemap' },
+                { key: 'Pol_Obj', label: 'Political Objectives', icon: 'fa-bullseye' },
+                { key: 'ForcesEst', label: 'Estimated Forces', icon: 'fa-users-cog' },
+                { key: 'Structure', label: 'Organizational Structure', icon: 'fa-project-diagram' }
+            ];
+
+            fields.forEach((field, index) => {
+                if (properties[field.key]) {
+                    // Create card
+                    const card = document.createElement('div');
+                    card.classList.add('card', 'mb-3', 'bg-dark', 'text-white');
+
+                    // Card Header with collapsible control
+                    const cardHeader = document.createElement('div');
+                    cardHeader.classList.add('card-header', 'd-flex', 'align-items-center', 'justify-content-between');
+                    cardHeader.setAttribute('data-bs-toggle', 'collapse');
+                    cardHeader.setAttribute('data-bs-target', `#collapse${index}`);
+                    cardHeader.style.cursor = 'pointer';
+                    cardHeader.innerHTML = `
+                        <div>
+                            <i class="fas ${field.icon} me-2"></i> <strong>${field.label}</strong>
+                        </div>
+                        <i class="fas fa-chevron-down"></i>
+                    `;
+                    card.appendChild(cardHeader);
+
+                    // Collapsible Card Body
+                    const collapseDiv = document.createElement('div');
+                    collapseDiv.classList.add('collapse');
+                    collapseDiv.id = `collapse${index}`;
+
+                    const cardBody = document.createElement('div');
+                    cardBody.classList.add('card-body');
+                    cardBody.innerText = properties[field.key];
+                    collapseDiv.appendChild(cardBody);
+
+                    card.appendChild(collapseDiv);
+                    infoContent.appendChild(card);
+                }
+            });
+        }
+
+        // Event delegation for collapse icon rotation
+        document.getElementById('infoContent').addEventListener('click', function (e) {
+            if (e.target && e.target.matches('.card-header, .card-header *')) {
+                const header = e.target.closest('.card-header');
+                const chevron = header.querySelector('.fa-chevron-down');
+                chevron.classList.toggle('rotate');
+            }
+        });
+
+        // Close Info Sidebar functionality
+        document.getElementById('closeInfoSidebar').addEventListener('click', function() {
+            const infoSidebar = document.getElementById('infoSidebar');
+            const mapContainer = document.getElementById('mapContainer');
+
+            infoSidebar.classList.remove('expanded');
+            mapContainer.classList.remove('expanded');
+
+            // Adjust the map size
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 300);
+        });
+    </script>
+</body>
+</html>
