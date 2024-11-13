@@ -268,6 +268,8 @@
             margin: 0;
             font-size: 16px;
         }
+
+        
     </style>
 </head>
 <body>
@@ -618,25 +620,26 @@
             }, 300);
         });
 
-        // Custom Control to display selected ARM GROUP
-        var infoControl = L.control({ position: 'topright' });
+// Custom Control to display selected ARM GROUP
+var infoControl = L.control({ position: 'topleft' });
 
-        infoControl.onAdd = function (map) {
-            this._div = L.DomUtil.create('div', 'info-control');
-            this.update();
-            return this._div;
-        };
+infoControl.onAdd = function (map) {
+    this._div = L.DomUtil.create('div', 'info-control');
+    this.update();
+    return this._div;
+};
 
-        // Method to update the control based on properties
-        infoControl.update = function (props) {
-            if (props) {
-                this._div.innerHTML = `<h5>Operation regions of ${props.ARM_GROUP}</h5>`;
-            } else {
-                this._div.innerHTML = '';
-            }
-        };
+// Method to update the control based on properties
+infoControl.update = function (props) {
+    if (props) {
+        this._div.innerHTML = `<h5>Operation regions of ${props.ARM_GROUP}</h5>`;
+    } else {
+        this._div.innerHTML = '';
+    }
+};
 
-        infoControl.addTo(map);
+infoControl.addTo(map);
+
     </script>
 </body>
 </html>
