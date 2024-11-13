@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Map Dashboard</title>
+    <title>Enhanced Web Map with GeoJSON</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -275,6 +275,12 @@
     <div id="sidebar">
         <h3 class="mb-4">Feature Names</h3>
         <input type="text" id="searchBox" class="form-control" placeholder="Search names..." aria-label="Search names" />
+        <div id="regionFilter" class="mt-4">
+            <h5>Filter by Operation Region</h5>
+            <select id="regionSelect" class="form-select">
+                <option value="">All Regions</option>
+            </select>
+        </div>
         <div id="nameList" class="mt-4"></div>
         <div id="controls" class="d-flex flex-column align-items-center mt-5">
             <button id="prevButton" class="btn btn-outline-secondary mb-3" disabled aria-label="Previous page"><i class="fas fa-chevron-left"></i> Previous</button>
@@ -342,11 +348,10 @@
         let featureNames = [];
         let filteredNames = [];
         let featureData = [];
+        let operationRegions = new Set();
         let currentIndex = 0;
         const itemsPerPage = 3;
-
-        // Create a marker cluster group
-        var markers = L.markerClusterGroup();
+        var geoJsonLayer;
 
         // Function to display names in the sidebar
         function updateNameList(names) {
@@ -360,7 +365,21 @@
                 nameDiv.classList.add("name-item");
                 nameDiv.innerHTML = `<i class="fas fa-map-marker-alt me-2"></i> ${nameObj.name}`;
                 nameDiv.addEventListener("click", () => {
-                    map.fitBounds(nameObj.bounds); // Zoom to the feature's bounds
+                    if (geoJsonLayer) {
+                        geoJsonLayer.clearLayers();
+                    }
+                    geoJsonLayer = L.geoJSON(featureData.find(f => f.name === nameObj.name).feature).addTo(map);
+                    map.fitBounds(featureData.find(f => f.name === nameObj.name).bounds); // Zoom to the feature's bounds
+                    populateInfoSidebar(featureData.find(f => f.name === nameObj.name).feature.properties);
+
+                    // Open the sidebar
+                    document.getElementById('infoSidebar').classList.add('expanded');
+                    document.getElementById('mapContainer').classList.add('expanded');
+
+                    // Adjust the map size
+                    setTimeout(() => {
+                        map.invalidateSize();
+                    }, 300);
                 });
                 nameList.appendChild(nameDiv);
             });
@@ -371,39 +390,30 @@
         }
 
         // Load GeoJSON data
-        fetch('mock-up-test.geojson')
+        fetch('arm-profile-cleaned.geojson')
             .then(response => response.json())
             .then(data => {
-                var geoJsonLayer = L.geoJSON(data, {
-                    onEachFeature: function(feature, layer) {
-                        if (feature.properties && feature.properties.Name) {
-                            const bounds = layer.getBounds(); // Get bounds of each feature
-                            featureNames.push({ name: feature.properties.Name, bounds: bounds });
-                            featureData.push(layer); // Store each feature's layer
-
-                            // Add click event listener to open right sidebar
-                            layer.on('click', function() {
-                                // Populate the sidebar with feature properties
-                                populateInfoSidebar(feature.properties);
-
-                                // Open the sidebar
-                                document.getElementById('infoSidebar').classList.add('expanded');
-                                document.getElementById('mapContainer').classList.add('expanded');
-
-                                // Adjust the map size
-                                setTimeout(() => {
-                                    map.invalidateSize();
-                                }, 300);
-                            });
-                        }
+                featureData = data.features.map((feature) => {
+                    if (feature.properties.OPS_REGION) {
+                        const regions = feature.properties.OPS_REGION.split(',').map(region => region.trim());
+                        regions.forEach(region => operationRegions.add(region));
                     }
+                    return {
+                        feature: feature,
+                        name: feature.properties.ARM_GROUP,
+                        bounds: L.geoJSON(feature).getBounds()
+                    };
                 });
+                featureNames = featureData.map((item) => ({ name: item.name, bounds: item.bounds }));
 
-                // Add GeoJSON layer to marker cluster group
-                markers.addLayer(geoJsonLayer);
-
-                // Add marker cluster group to map
-                map.addLayer(markers);
+                // Populate the region filter dropdown
+                const regionSelect = document.getElementById('regionSelect');
+                Array.from(operationRegions).sort().forEach(region => {
+                    const option = document.createElement('option');
+                    option.value = region;
+                    option.textContent = region;
+                    regionSelect.appendChild(option);
+                });
 
                 // Set initial display
                 filteredNames = featureNames;
@@ -419,6 +429,20 @@
         document.getElementById("searchBox").addEventListener("input", function() {
             const searchQuery = this.value.toLowerCase();
             filteredNames = featureNames.filter(item => item.name.toLowerCase().includes(searchQuery));
+            currentIndex = 0;
+            updateNameList(filteredNames);
+        });
+
+        // Filter by Operation Region
+        document.getElementById("regionSelect").addEventListener("change", function() {
+            const selectedRegion = this.value;
+            if (selectedRegion) {
+                filteredNames = featureData.filter(item => {
+                    return item.feature.properties.OPS_REGION.split(',').map(region => region.trim()).includes(selectedRegion);
+                }).map(item => ({ name: item.name, bounds: item.bounds }));
+            } else {
+                filteredNames = featureNames;
+            }
             currentIndex = 0;
             updateNameList(filteredNames);
         });
@@ -458,23 +482,20 @@
             infoContent.innerHTML = ''; // Clear previous content
 
             const title = document.createElement('h3');
-            title.innerText = properties.Name;
+            title.innerText = properties.ARM_GROUP;
             title.classList.add('mb-4');
             infoContent.appendChild(title);
 
             // Define the fields, their descriptions, and icons
             const fields = [
-                { key: 'Affiliation', label: 'Affiliation', icon: 'fa-handshake' },
-                { key: 'Alliances', label: 'Alliances', icon: 'fa-users' },
-                { key: 'FoundDate', label: 'Founding Date(s)', icon: 'fa-calendar-alt' },
-                { key: 'FoundMemb', label: 'Founding Members', icon: 'fa-user-friends' },
-                { key: 'Leader', label: 'Current Leaders', icon: 'fa-user-tie' },
-                { key: 'OperArea', label: 'Operating Areas', icon: 'fa-map-marker-alt' },
-                { key: 'FoundDoc', label: 'Founding Document', icon: 'fa-file-alt' },
-                { key: 'Rel_MainEnt', label: 'Relationship with Mainstream Entities', icon: 'fa-sitemap' },
-                { key: 'Pol_Obj', label: 'Political Objectives', icon: 'fa-bullseye' },
-                { key: 'ForcesEst', label: 'Estimated Forces', icon: 'fa-users-cog' },
-                { key: 'Structure', label: 'Organizational Structure', icon: 'fa-project-diagram' }
+                { key: 'OPS_REGION', label: 'Operation Region', icon: 'fa-map-marked-alt' },
+                { key: 'OPS_TS', label: 'Township', icon: 'fa-map-pin' },
+                { key: 'IDEO_FOCUS', label: 'Ideological Focus', icon: 'fa-lightbulb' },
+                { key: 'FOUNDING_DATE', label: 'Founding Date', icon: 'fa-calendar-alt' },
+
+                { key: 'FOUNDER', label: 'Founder(s)', icon: 'fa-user-friends' },
+                { key: 'INIT_OBJ', label: 'Initial Objectives/Goals', icon: 'fa-bullseye' },
+                { key: 'REF', label: 'Reference', icon: 'fa-book' }
             ];
 
             fields.forEach((field, index) => {
