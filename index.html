@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Profile Map</title>
+    <title>Enhanced Web Map with GeoJSON</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -36,7 +36,7 @@
             height: 100%;
             background-color: #343a40;
             color: #ffffff;
-            padding: 70px 20px 20px 20px; /* Added top padding to avoid overlap */
+            padding: 70px 20px 20px 20px;
             overflow-y: auto;
             z-index: 1000;
             transition: transform 0.3s ease;
@@ -58,7 +58,7 @@
 
         /* Adjust map container when infoSidebar is open */
         #mapContainer.expanded {
-            margin-right: 270px; /* Adjust based on sidebar width */
+            margin-right: 270px;
         }
 
         /* Toggle Button Styles */
@@ -149,15 +149,15 @@
             height: 100%;
             background-color: #343a40;
             color: #ffffff;
-            padding: 70px 20px 20px 20px; /* Added top padding */
+            padding: 70px 20px 20px 20px;
             overflow-y: auto;
             z-index: 1000;
             transition: transform 0.3s ease;
-            transform: translateX(100%); /* Hidden by default */
+            transform: translateX(100%);
         }
 
         #infoSidebar.expanded {
-            transform: translateX(0); /* Show sidebar */
+            transform: translateX(0);
         }
 
         /* Close Button Styles */
@@ -213,7 +213,7 @@
                 top: 0;
                 left: 0;
                 transform: translateY(-100%);
-                padding-top: 70px; /* Adjusted padding for mobile */
+                padding-top: 70px;
             }
 
             #sidebar.collapsed {
@@ -243,7 +243,7 @@
                 bottom: 0;
                 top: auto;
                 transform: translateY(100%);
-                padding-top: 20px; /* Adjusted padding for mobile */
+                padding-top: 20px;
             }
 
             #infoSidebar.expanded {
@@ -254,6 +254,19 @@
                 top: 15px;
                 right: 15px;
             }
+        }
+
+        /* Styles for the Info Control */
+        .info-control {
+            background-color: rgba(52, 58, 64, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            color: #ffffff;
+        }
+
+        .info-control h5 {
+            margin: 0;
+            font-size: 16px;
         }
     </style>
 </head>
@@ -283,8 +296,12 @@
         </div>
         <div id="nameList" class="mt-4"></div>
         <div id="controls" class="d-flex flex-column align-items-center mt-5">
-            <button id="prevButton" class="btn btn-outline-secondary mb-3" disabled aria-label="Previous page"><i class="fas fa-chevron-left"></i> Previous</button>
-            <button id="nextButton" class="btn btn-outline-primary" aria-label="Next page"><i class="fas fa-chevron-right"></i> Next</button>
+            <button id="prevButton" class="btn btn-outline-secondary mb-3" disabled aria-label="Previous page">
+                <i class="fas fa-chevron-left"></i> Previous
+            </button>
+            <button id="nextButton" class="btn btn-outline-primary" aria-label="Next page">
+                <i class="fas fa-chevron-right"></i> Next
+            </button>
         </div>
     </div>
 
@@ -344,52 +361,36 @@
         })
         .addTo(map);
 
-        // Initialize variables
+        // Declare variables
+        var geoJsonLayer;
         let featureNames = [];
         let filteredNames = [];
         let featureData = [];
         let operationRegions = new Set();
         let currentIndex = 0;
         const itemsPerPage = 3;
-        var geoJsonLayer;
+        var townshipLayer;
 
-        // Function to display names in the sidebar
-        function updateNameList(names) {
-            const nameList = document.getElementById("nameList");
-            nameList.innerHTML = ''; // Clear the current list
-
-            // Get the current set of names to display
-            const pageNames = names.slice(currentIndex, currentIndex + itemsPerPage);
-            pageNames.forEach((nameObj, index) => {
-                const nameDiv = document.createElement("button");
-                nameDiv.classList.add("name-item");
-                nameDiv.innerHTML = `<i class="fas fa-map-marker-alt me-2"></i> ${nameObj.name}`;
-                nameDiv.addEventListener("click", () => {
-                    if (geoJsonLayer) {
-                        geoJsonLayer.clearLayers();
+        // Load Township GeoJSON data and add to the map
+        fetch('mmr_polbnda_adm3_250k_mimu_1.geojson')
+            .then(response => response.json())
+            .then(data => {
+                townshipLayer = L.geoJSON(data, {
+                    style: {
+                        color: 'red',      // Red stroke
+                        weight: 0.4,       // Reduced stroke size
+                        fillOpacity: 0     // No fill color
+                    },
+                    onEachFeature: function (feature, layer) {
+                        if (feature.properties && feature.properties.TS) {
+                            layer.bindPopup(`<strong>${feature.properties.TS}</strong>`);
+                        }
                     }
-                    geoJsonLayer = L.geoJSON(featureData.find(f => f.name === nameObj.name).feature).addTo(map);
-                    map.fitBounds(featureData.find(f => f.name === nameObj.name).bounds); // Zoom to the feature's bounds
-                    populateInfoSidebar(featureData.find(f => f.name === nameObj.name).feature.properties);
+                }).addTo(map);
+            })
+            .catch(error => console.error('Error loading the Township GeoJSON file:', error));
 
-                    // Open the sidebar
-                    document.getElementById('infoSidebar').classList.add('expanded');
-                    document.getElementById('mapContainer').classList.add('expanded');
-
-                    // Adjust the map size
-                    setTimeout(() => {
-                        map.invalidateSize();
-                    }, 300);
-                });
-                nameList.appendChild(nameDiv);
-            });
-
-            // Update button states
-            document.getElementById("prevButton").disabled = currentIndex === 0;
-            document.getElementById("nextButton").disabled = currentIndex + itemsPerPage >= names.length;
-        }
-
-        // Load GeoJSON data
+        // Load ARM Group GeoJSON data
         fetch('arm-profile-cleaned.geojson')
             .then(response => response.json())
             .then(data => {
@@ -424,6 +425,59 @@
                 // Hide the loading spinner
                 document.getElementById('loadingSpinner').style.display = 'none';
             });
+
+        // Function to display names in the sidebar
+        function updateNameList(names) {
+            const nameList = document.getElementById("nameList");
+            nameList.innerHTML = ''; // Clear the current list
+
+            // Get the current set of names to display
+            const pageNames = names.slice(currentIndex, currentIndex + itemsPerPage);
+            pageNames.forEach((nameObj, index) => {
+                const nameDiv = document.createElement("button");
+                nameDiv.classList.add("name-item");
+                nameDiv.innerHTML = `<i class="fas fa-map-marker-alt me-2"></i> ${nameObj.name}`;
+                nameDiv.addEventListener("click", () => {
+                    if (geoJsonLayer) {
+                        geoJsonLayer.clearLayers();
+                    }
+
+                    const selectedFeature = featureData.find(f => f.name === nameObj.name);
+                    geoJsonLayer = L.geoJSON(selectedFeature.feature, {
+                        style: {
+                            color: '#6A42C2', // Default Leaflet blue color
+                            weight: 3,
+                            fillOpacity: 0.3   // Reduced fill opacity
+                        }
+                    }).addTo(map);
+                    map.fitBounds(selectedFeature.bounds); // Zoom to the feature's bounds
+
+                    populateInfoSidebar(selectedFeature.feature.properties);
+
+                    // Update the info control with the selected ARM GROUP
+                    infoControl.update(selectedFeature.feature.properties);
+
+                    // Bring the township layer to the front
+                    if (townshipLayer) {
+                        townshipLayer.bringToFront();
+                    }
+
+                    // Open the sidebar
+                    document.getElementById('infoSidebar').classList.add('expanded');
+                    document.getElementById('mapContainer').classList.add('expanded');
+
+                    // Adjust the map size
+                    setTimeout(() => {
+                        map.invalidateSize();
+                    }, 300);
+                });
+                nameList.appendChild(nameDiv);
+            });
+
+            // Update button states
+            document.getElementById("prevButton").disabled = currentIndex === 0;
+            document.getElementById("nextButton").disabled = currentIndex + itemsPerPage >= names.length;
+        }
 
         // Search function
         document.getElementById("searchBox").addEventListener("input", function() {
@@ -492,7 +546,6 @@
                 { key: 'OPS_TS', label: 'Township', icon: 'fa-map-pin' },
                 { key: 'IDEO_FOCUS', label: 'Ideological Focus', icon: 'fa-lightbulb' },
                 { key: 'FOUNDING_DATE', label: 'Founding Date', icon: 'fa-calendar-alt' },
-
                 { key: 'FOUNDER', label: 'Founder(s)', icon: 'fa-user-friends' },
                 { key: 'INIT_OBJ', label: 'Initial Objectives/Goals', icon: 'fa-bullseye' },
                 { key: 'REF', label: 'Reference', icon: 'fa-book' }
@@ -551,11 +604,39 @@
             infoSidebar.classList.remove('expanded');
             mapContainer.classList.remove('expanded');
 
+            // Remove the ARM Group layer
+            if (geoJsonLayer) {
+                geoJsonLayer.clearLayers();
+            }
+
+            // Clear the info control text
+            infoControl.update();
+
             // Adjust the map size
             setTimeout(() => {
                 map.invalidateSize();
             }, 300);
         });
+
+        // Custom Control to display selected ARM GROUP
+        var infoControl = L.control({ position: 'topright' });
+
+        infoControl.onAdd = function (map) {
+            this._div = L.DomUtil.create('div', 'info-control');
+            this.update();
+            return this._div;
+        };
+
+        // Method to update the control based on properties
+        infoControl.update = function (props) {
+            if (props) {
+                this._div.innerHTML = `<h5>Operation regions of ${props.ARM_GROUP}</h5>`;
+            } else {
+                this._div.innerHTML = '';
+            }
+        };
+
+        infoControl.addTo(map);
     </script>
 </body>
 </html>
